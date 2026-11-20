@@ -1,0 +1,19 @@
+version: "3.9"
+
+# Dev-only Postgres so you can start Task 3 immediately.
+# The API service/Dockerfile gets added in Task 12 once the app itself is dockerized.
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flashcart
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: flashcart
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
