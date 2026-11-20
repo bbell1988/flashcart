@@ -1,7 +1,5 @@
 version: "3.9"
 
-# Dev-only Postgres so you can start Task 3 immediately.
-# The API service/Dockerfile gets added in Task 12 once the app itself is dockerized.
 services:
   postgres:
     image: postgres:16
