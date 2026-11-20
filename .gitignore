@@ -11,3 +11,4 @@ venv/
 htmlcov/
 *.db
 .DS_Store
+docs/phase1-tasks.md
