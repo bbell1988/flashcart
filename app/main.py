@@ -1,12 +1,15 @@
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import text, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
-from app.models import Product
-from app.schemas import ProductCreate, ProductOut
+from app.models import User, Product
+from app.schemas import UserCreate, UserOut, ProductCreate, ProductOut
 
 from pydantic import BaseModel
+
+from app.security import hash_password
 
 app = FastAPI()
 
@@ -44,3 +47,20 @@ async def post_products(product_in: ProductCreate, db: AsyncSession = Depends(ge
     await db.commit()
     await db.refresh(new_product)
     return new_product
+
+@app.post('/register', response_model=UserOut)
+async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
+
+    hashed_password = hash_password(user_in.password)
+    new_user = User(name=user_in.name, email=user_in.email, password_hash=hashed_password)
+    try:
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
+        return new_user    
+    except IntegrityError as e:
+        await db.rollback()
+        if 'ix_users_email' in str(e.orig):
+            raise HTTPException(status_code=409, detail="email already registered")
+        raise
+
