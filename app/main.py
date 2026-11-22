@@ -5,11 +5,16 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.models import User, Product
-from app.schemas import UserCreate, UserOut, ProductCreate, ProductOut
+from app.schemas import UserCreate, UserOut, ProductCreate, ProductOut, LoginRequest, Token
 
 from pydantic import BaseModel
 
-from app.security import hash_password
+from app.security import (
+    get_current_user,
+    hash_password,
+    verify_password,
+    create_access_token,
+)
 
 app = FastAPI()
 
@@ -63,4 +68,19 @@ async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db))
         if 'ix_users_email' in str(e.orig):
             raise HTTPException(status_code=409, detail="email already registered")
         raise
+
+@app.post('/auth/login', response_model=Token)
+async def login_user(login_in: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email==login_in.email))
+    user = result.scalar_one_or_none()
+
+    if user is None or not verify_password(login_in.password, user.password_hash):
+        raise HTTPException(status_code=401,detail='Invalid email or password')
+    else:
+        access_token = create_access_token({'sub': str(user.id)})
+        return Token(access_token=access_token)
+
+@app.get('/me', response_model=UserOut)
+async def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
 
