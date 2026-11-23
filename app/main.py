@@ -4,8 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
-from app.models import User, Product
-from app.schemas import UserCreate, UserOut, ProductCreate, ProductOut, LoginRequest, Token
+from app.models import User, Product, Order, OrderItem
+from app.schemas import (
+    UserCreate,
+    UserOut,
+    ProductCreate,
+    ProductOut,
+    OrderCreate,
+    OrderOut,
+    LoginRequest,
+    Token
+)
 
 from pydantic import BaseModel
 
@@ -86,3 +95,43 @@ async def login_user(login_in: LoginRequest, db: AsyncSession = Depends(get_db))
 @app.get('/me', response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@app.post('/orders', response_model=OrderOut)
+async def place_order(
+    order_in: OrderCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    products: dict[int, Product] = {}
+
+    for item in order_in.items:
+        result = await db.execute(select(Product).where(Product.id == item.product_id))
+        product = result.scalar_one_or_none()
+
+        if product is None:
+            raise HTTPException(status_code=404, detail=f'No product exists with id {item.product_id}')
+        if product.stock_qty < item.quantity:
+            raise HTTPException(status_code=400, detail=f'Insufficient stock for product {item.product_id}')
+
+        products[item.product_id] = product
+
+    new_order = Order(user_id=current_user.id)
+    db.add(new_order)
+    await db.flush()
+
+    for item in order_in.items:
+        product = products[item.product_id]
+        product.stock_qty -= item.quantity
+
+        order_item = OrderItem(
+            order_id=new_order.id,
+            product_id=item.product_id,
+            quantity=item.quantity,
+            price_at_purchase=product.price_cents,
+        )
+        db.add(order_item)
+
+    await db.commit()
+    await db.refresh(new_order, attribute_names=["items"])
+    return new_order
+
