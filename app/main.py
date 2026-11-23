@@ -14,6 +14,7 @@ from app.security import (
     hash_password,
     verify_password,
     create_access_token,
+    require_role
 )
 
 app = FastAPI()
@@ -45,8 +46,10 @@ async def get_product_by_id(id: int, db: AsyncSession = Depends(get_db)):
         return product
 
 @app.post('/products', response_model=ProductOut)
-# @TODO restrict to admin role
-async def post_products(product_in: ProductCreate, db: AsyncSession = Depends(get_db)):
+async def post_products(
+    product_in: ProductCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role('admin'))):
     new_product = Product(**product_in.model_dump())
     db.add(new_product)
     await db.commit()
@@ -83,4 +86,3 @@ async def login_user(login_in: LoginRequest, db: AsyncSession = Depends(get_db))
 @app.get('/me', response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
-
