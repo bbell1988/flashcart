@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
@@ -12,6 +10,23 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      postgres_user: flashcart
+      postgres_password: changeme
+      postgres_db: flashcart
+      postgres_host: postgres
+      postgres_port: 5432
+      jwt_secret: ${jwt_secret}
+      jwt_algorithm: HS256
+      jwt_expire_minutes: 30
+    ports:
+      - "8000:8000"
 
 volumes:
   pgdata:
