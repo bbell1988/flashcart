@@ -2,6 +2,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import User, Product, Order, OrderItem
@@ -135,3 +136,32 @@ async def place_order(
     await db.refresh(new_order, attribute_names=["items"])
     return new_order
 
+@app.get('/orders', response_model=list[OrderOut])
+async def get_orders(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(Order).options(selectinload(Order.items))
+    if current_user.role == 'admin':
+        result = await db.execute(query)
+    else:
+        result = await db.execute(query.where(Order.user_id == current_user.id))
+    return result.scalars().all()
+
+@app.get('/orders/{id}', response_model= OrderOut)
+async def get_order_by_id(
+    id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Order).where(Order.id == id).options(selectinload(Order.items))
+    )
+    order = result.scalar_one_or_none()
+
+    if order is None or (
+        current_user.role != 'admin' and (current_user.id != order.user_id)):
+            # decided to use 404 error instead of 403 as extra security measure
+            raise HTTPException(status_code=404, detail='No order found')
+
+    return order
